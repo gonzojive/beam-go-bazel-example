@@ -1,29 +1,4 @@
-## Reproduction of OOM issue
-
-This is a reproduction of a beam pipeline crashing due to OOM.
-https://github.com/apache/beam/issues/21817
-
-Start up the Flink server
-
-```shell
-bazel run :flink-job-server-driver -- \
-  --flink-conf-dir $PWD/flink-conf/ \
-  --job-port 8099
-```
-
-```shell
-mkdir -p tmp
-```
-
-### Successful cases
-
-```shell
-bazel run -c opt //cmd/example_pipeline --   --runner flink   --environment_type LOOPBACK   --endpoint localhost:8099   --output "$PWD/tmp/records"   --record-bytes 10000   --record-count 87600 --alsologtostderr
-```
-
-### Problem 1: 1,000 x 5MB records
-
-1,000 x 5MB records fails per [README.fail1.md](README.fail1.md)
+Command
 
 ```shell
 bazel run //cmd/example_pipeline -- \
@@ -36,14 +11,8 @@ bazel run //cmd/example_pipeline -- \
   --record-count 10000
 ```
 
-
-### Problem 2:
-
-The problem I am trying to reproduce in this project is this error, caused by
-another pipeline: `java.io.IOException: Cannot write record to fresh sort
-buffer. Record too large.`
-
 ```
+[flink-runner-job-invoker-2] ERROR org.apache.beam.runners.jobsubmission.JobInvocation - Error during job invocation go0job0101655507201275497696-red-0617230641-8e320fc2_ac2c4bdc-598d-4571-9392-c740b54aaf82.
 org.apache.flink.runtime.client.JobExecutionException: Job execution failed.
 	at org.apache.flink.runtime.jobmaster.JobResult.toJobExecutionResult(JobResult.java:144)
 	at org.apache.flink.runtime.minicluster.MiniClusterJobClient.lambda$getJobExecutionResult$3(MiniClusterJobClient.java:137)
@@ -102,7 +71,8 @@ Caused by: org.apache.flink.runtime.JobException: Recovery is suppressed by NoRe
 	at org.apache.flink.runtime.scheduler.SchedulerBase.updateTaskExecutionState(SchedulerBase.java:684)
 	at org.apache.flink.runtime.scheduler.SchedulerNG.updateTaskExecutionState(SchedulerNG.java:79)
 	at org.apache.flink.runtime.jobmaster.JobMaster.updateTaskExecutionState(JobMaster.java:444)
-	at jdk.internal.reflect.GeneratedMethodAccessor50.invoke(Unknown Source)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
 	at org.apache.flink.runtime.rpc.akka.AkkaRpcActor.lambda$handleRpcInvocation$1(AkkaRpcActor.java:316)
@@ -128,14 +98,13 @@ Caused by: org.apache.flink.runtime.JobException: Recovery is suppressed by NoRe
 	at akka.dispatch.Mailbox.run(Mailbox.scala:231)
 	at akka.dispatch.Mailbox.exec(Mailbox.scala:243)
 	... 5 more
-Caused by: java.io.IOException: Cannot write record to fresh sort buffer. Record too large.
-	at org.apache.flink.runtime.operators.chaining.SynchronousChainedCombineDriver.collect(SynchronousChainedCombineDriver.java:190)
+Caused by: java.lang.RuntimeException: Emitting the record caused an I/O exception: Failed to serialize element. Serialized size (> 650016384 bytes) exceeds JVM heap space
+	at org.apache.flink.runtime.operators.shipping.OutputCollector.collect(OutputCollector.java:69)
 	at org.apache.flink.runtime.operators.util.metrics.CountingCollector.collect(CountingCollector.java:35)
-	at org.apache.flink.runtime.operators.chaining.ChainedMapDriver.collect(ChainedMapDriver.java:78)
-	at org.apache.flink.runtime.operators.util.metrics.CountingCollector.collect(CountingCollector.java:35)
-	at org.apache.beam.runners.flink.translation.functions.FlinkExecutableStagePruningFunction.flatMap(FlinkExecutableStagePruningFunction.java:58)
-	at org.apache.beam.runners.flink.translation.functions.FlinkExecutableStagePruningFunction.flatMap(FlinkExecutableStagePruningFunction.java:30)
-	at org.apache.flink.runtime.operators.FlatMapDriver.run(FlatMapDriver.java:113)
+	at org.apache.beam.runners.flink.translation.functions.HashingFlinkCombineRunner.combine(HashingFlinkCombineRunner.java:117)
+	at org.apache.beam.runners.flink.translation.functions.FlinkReduceFunction.reduce(FlinkReduceFunction.java:108)
+	at org.apache.flink.api.java.operators.translation.PlanUnwrappingReduceGroupOperator$TupleUnwrappingNonCombinableGroupReducer.reduce(PlanUnwrappingReduceGroupOperator.java:120)
+	at org.apache.flink.runtime.operators.GroupReduceDriver.run(GroupReduceDriver.java:145)
 	at org.apache.flink.runtime.operators.BatchTask.run(BatchTask.java:519)
 	at org.apache.flink.runtime.operators.BatchTask.invoke(BatchTask.java:360)
 	at org.apache.flink.runtime.taskmanager.Task.runWithSystemExitMonitoring(Task.java:958)
@@ -143,4 +112,28 @@ Caused by: java.io.IOException: Cannot write record to fresh sort buffer. Record
 	at org.apache.flink.runtime.taskmanager.Task.doRun(Task.java:766)
 	at org.apache.flink.runtime.taskmanager.Task.run(Task.java:575)
 	at java.base/java.lang.Thread.run(Thread.java:829)
+Caused by: java.io.IOException: Failed to serialize element. Serialized size (> 650016384 bytes) exceeds JVM heap space
+	at org.apache.flink.core.memory.DataOutputSerializer.resize(DataOutputSerializer.java:312)
+	at org.apache.flink.core.memory.DataOutputSerializer.write(DataOutputSerializer.java:124)
+	at org.apache.beam.runners.flink.translation.wrappers.DataOutputViewWrapper.write(DataOutputViewWrapper.java:44)
+	at java.base/java.io.DataOutputStream.write(DataOutputStream.java:107)
+	at java.base/java.io.FilterOutputStream.write(FilterOutputStream.java:108)
+	at org.apache.beam.sdk.coders.ByteArrayCoder.encode(ByteArrayCoder.java:67)
+	at org.apache.beam.sdk.coders.ByteArrayCoder.encode(ByteArrayCoder.java:56)
+	at org.apache.beam.sdk.coders.ByteArrayCoder.encode(ByteArrayCoder.java:41)
+	at org.apache.beam.sdk.coders.IterableLikeCoder.encode(IterableLikeCoder.java:113)
+	at org.apache.beam.sdk.coders.IterableLikeCoder.encode(IterableLikeCoder.java:59)
+	at org.apache.beam.sdk.coders.Coder.encode(Coder.java:136)
+	at org.apache.beam.sdk.coders.KvCoder.encode(KvCoder.java:73)
+	at org.apache.beam.sdk.coders.KvCoder.encode(KvCoder.java:37)
+	at org.apache.beam.sdk.util.WindowedValue$FullWindowedValueCoder.encode(WindowedValue.java:607)
+	at org.apache.beam.sdk.util.WindowedValue$FullWindowedValueCoder.encode(WindowedValue.java:598)
+	at org.apache.beam.sdk.util.WindowedValue$FullWindowedValueCoder.encode(WindowedValue.java:558)
+	at org.apache.beam.runners.flink.translation.types.CoderTypeSerializer.serialize(CoderTypeSerializer.java:110)
+	at org.apache.flink.runtime.plugable.SerializationDelegate.write(SerializationDelegate.java:54)
+	at org.apache.flink.runtime.io.network.api.writer.RecordWriter.serializeRecord(RecordWriter.java:132)
+	at org.apache.flink.runtime.io.network.api.writer.RecordWriter.emit(RecordWriter.java:106)
+	at org.apache.flink.runtime.io.network.api.writer.ChannelSelectorRecordWriter.emit(ChannelSelectorRecordWriter.java:54)
+	at org.apache.flink.runtime.operators.shipping.OutputCollector.collect(OutputCollector.java:65)
+	... 12 more
 ```

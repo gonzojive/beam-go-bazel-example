@@ -43,11 +43,12 @@ func run(ctx context.Context) error {
 
 	p := beam.NewPipeline()
 	s := p.Root()
-	var counts beamgen.Collection[int] = beamgen.Create[int](s, *recordCount)
-	var records beamgen.Collection[[]byte] = beamgen.ParDo1[int, []byte](s, randomBytesGeneratorFn{
-		Seed:           42,
-		BytesPerRecord: *recordSize,
-	}, counts)
+	var seeds beamgen.Collection[int64] = beamgen.Create[int64](s, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+	var records beamgen.Collection[[]byte] = beamgen.ParDo1[int64, []byte](s, randomBytesGeneratorFn{
+		NumRecordsToEmit: *recordCount / 10,
+		BytesPerRecord:   *recordSize,
+	}, seeds)
+	records = beamgen.Reshuffle(s.Scope("ReshuffleRecords"), records)
 
 	tfrecordio.WriteSharded(s, *recordsOutput, *shardCount, records)
 
@@ -68,13 +69,13 @@ func setWorkerBinaryFlag() error {
 }
 
 type randomBytesGeneratorFn struct {
-	Seed           int64 `json:"seed"`
-	BytesPerRecord int   `json:"size"`
+	NumRecordsToEmit int
+	BytesPerRecord   int
 }
 
-func (fn randomBytesGeneratorFn) ProcessElement(_ context.Context, count int, emit func([]byte)) error {
-	r := rand.New(rand.NewSource(fn.Seed))
-	for i := 0; i < count; i++ {
+func (fn randomBytesGeneratorFn) ProcessElement(_ context.Context, seed int64, emit func([]byte)) error {
+	r := rand.New(rand.NewSource(seed))
+	for i := 0; i < int(fn.NumRecordsToEmit); i++ {
 		buf := make([]byte, fn.BytesPerRecord)
 		if _, err := r.Read(buf); err != nil {
 			return fmt.Errorf("error generating record %d: %w", i, err)

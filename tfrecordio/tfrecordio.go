@@ -31,7 +31,7 @@ func shardNum(data []byte, shardCount int) int {
 // WriteSharded writes a PCollection<[]byte]> to a file using tfrecord format.
 func WriteSharded(s beam.Scope, filenamePrefix string, shardCount int, col beamgen.Collection[[]byte]) {
 	type T = []byte
-	s = s.Scope("textio.Write")
+	s = s.Scope("tfrecord.Write")
 
 	if shardCount <= 0 {
 		panic(fmt.Errorf("invalid shardCount %d <= 0", shardCount))
