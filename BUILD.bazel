@@ -28,3 +28,16 @@ alias(
     name = "tsconfig.json",
     actual = "//web:tsconfig.json",
 )
+
+java_binary(
+    name = "flink-job-server-driver",
+    main_class = "org.apache.beam.runners.flink.FlinkJobServerDriver",
+    runtime_deps = [
+        # Obtained by looking at results of
+        # bazel query @maven//...
+        "@maven//:org_apache_beam_beam_runners_flink_1_14",
+        "@maven//:org_slf4j_slf4j_api",
+        "@maven//:org_slf4j_slf4j_simple",
+        "@maven//:org_apache_flink_flink_runtime_web_2_12",
+    ],
+)

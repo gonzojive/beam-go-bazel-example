@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"reflect"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
@@ -16,9 +17,9 @@ import (
 
 var (
 	recordsOutput = flag.String("output", "", "output tfrecords prefix")
-	shardCount    = flag.Int("shardCount", 5, "number of output shards")
-	recordSize    = flag.Int("record_bytes", 1024*1024*3, "output tfrecords prefix")
-	recordCount   = flag.Int("record_count", 1000, "output tfrecords prefix")
+	shardCount    = flag.Int("shard-count", 5, "number of output shards")
+	recordSize    = flag.Int("record-bytes", 1024*1024*3, "output tfrecords prefix")
+	recordCount   = flag.Int("record-count", 1000, "output tfrecords prefix")
 )
 
 func init() {
@@ -27,13 +28,19 @@ func init() {
 
 func main() {
 	flag.Parse()
-	beam.Init()
 	if err := run(context.Background()); err != nil {
 		glog.Exitf("runtime error: %v", err)
 	}
 }
 
 func run(ctx context.Context) error {
+	// Needed to transmit the worker binary to the server without relying on `go
+	// build`, which typically doesn't work with bazel builds.
+	if err := setWorkerBinaryFlag(); err != nil {
+		return fmt.Errorf("failed to set --worker_binary: %w", err)
+	}
+	beam.Init()
+
 	p := beam.NewPipeline()
 	s := p.Root()
 	var counts beamgen.Collection[int] = beamgen.Create[int](s, *recordCount)
@@ -47,6 +54,16 @@ func run(ctx context.Context) error {
 	if err := beamx.Run(ctx, p); err != nil {
 		return fmt.Errorf("failed to execute job: %w", err)
 	}
+	fmt.Println("Pipeline completed successfully.")
+	return nil
+}
+
+func setWorkerBinaryFlag() error {
+	binPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	flag.Set("worker_binary", binPath)
 	return nil
 }
 
