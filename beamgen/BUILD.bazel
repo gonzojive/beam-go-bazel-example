@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "beamgen",
+    srcs = ["beamgen.go"],
+    importpath = "github.com/gonzojive/beam-go-bazel-example/beamgen",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime/graphx/schema",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/io/textio",
+        "@com_github_samber_lo//:lo",
+    ],
+)

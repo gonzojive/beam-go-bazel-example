@@ -1,0 +1,30 @@
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+package(default_visibility = ["//:__subpackages__"])
+
+# gazelle:prefix github.com/gonzojive/beam-go-bazel-example
+
+# gazelle:exclude node_modules
+
+# gazelle:resolve go go github.com/apache/beam/sdks/go/pkg/beam @com_github_apache_beam_sdks_v2//go/pkg/beam:go_default_library
+# gazelle:resolve go github.com/apache/beam/sdks/go/pkg/beam/core/runtime/graphx/schema @com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime/graphx/schema:schema
+# gazelle:resolve go github.com/apache/beam/sdks/go/pkg/beam/core/runtime @com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime:runtime
+gazelle(name = "gazelle")
+
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=workspace_go_deps.bzl%gazelle_managed_go_repositories",
+        #"-prune",
+    ],
+    command = "update-repos",
+)
+
+# ts_library uses the `//:tsconfig.json` target
+# by default. This alias allows omitting explicit tsconfig
+# attribute.
+alias(
+    name = "tsconfig.json",
+    actual = "//web:tsconfig.json",
+)

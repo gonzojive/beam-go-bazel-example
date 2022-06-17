@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "example_pipeline_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/gonzojive/beam-go-bazel-example/cmd/example_pipeline",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//beamgen",
+        "//tfrecordio",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/x/beamx",
+        "@com_github_golang_glog//:glog",
+    ],
+)
+
+go_binary(
+    name = "example_pipeline",
+    embed = [":example_pipeline_lib"],
+    visibility = ["//visibility:public"],
+)

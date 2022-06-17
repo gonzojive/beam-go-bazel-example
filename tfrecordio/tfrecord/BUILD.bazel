@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "tfrecord",
+    srcs = [
+        "tfrecord.go",
+        "tfrecord_reader.go",
+        "tfrecord_utils.go",
+        "tfrecord_writer.go",
+    ],
+    importpath = "github.com/gonzojive/beam-go-bazel-example/tfrecordio/tfrecord",
+    visibility = ["//visibility:public"],
+)

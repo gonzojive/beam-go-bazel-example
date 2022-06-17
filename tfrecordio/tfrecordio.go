@@ -1,7 +1,6 @@
 package tfrecordio
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"hash/fnv"
@@ -11,19 +10,17 @@ import (
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/core/runtime"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/core/runtime/graphx/schema"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/io/filesystem"
-	"github.com/apache/beam/sdks/v2/go/pkg/beam/log"
 	"github.com/gonzojive/beam-go-bazel-example/beamgen"
 	"github.com/gonzojive/beam-go-bazel-example/tfrecordio/tfrecord"
-	"google.golang.org/protobuf/proto"
 )
 
-func init() [
+func init() {
 	runtime.RegisterType(reflect.TypeOf((*writeFileFn)(nil)).Elem())
 	schema.RegisterType(reflect.TypeOf((*writeFileFn)(nil)).Elem())
 
-	runtime.RegisterType(reflect.TypeOf((*assignShardNumberFn[T])(nil)).Elem())
-	schema.RegisterType(reflect.TypeOf((*assignShardNumberFn[T])(nil)).Elem())
-]
+	runtime.RegisterType(reflect.TypeOf((*assignShardNumberFn)(nil)).Elem())
+	schema.RegisterType(reflect.TypeOf((*assignShardNumberFn)(nil)).Elem())
+}
 
 func shardNum(data []byte, shardCount int) int {
 	h := fnv.New32a()
@@ -31,8 +28,8 @@ func shardNum(data []byte, shardCount int) int {
 	return int(h.Sum32()) % shardCount
 }
 
-// WriteShartded writes a PCollection<[]byte]> to a file using tfrecord format.
-func WriteShartded(s beam.Scope, filenamePrefix string, shardCount int, col beamgen.Collection[[]byte]) {
+// WriteSharded writes a PCollection<[]byte]> to a file using tfrecord format.
+func WriteSharded(s beam.Scope, filenamePrefix string, shardCount int, col beamgen.Collection[[]byte]) {
 	type T = []byte
 	s = s.Scope("textio.Write")
 
@@ -48,18 +45,11 @@ func WriteShartded(s beam.Scope, filenamePrefix string, shardCount int, col beam
 
 	// TODO(BEAM-3860) 3/15/2018: use side input instead of GBK.
 
-	// var shardNumbers []int
-	// for i := 0; i < shardCount; i++ {
-	// 	shardNumbers = append(shardNumbers, i)
-	// }
-	//shardNumbersCol := beamgen.Create(s.Scope("ShardNumbers"), shardNumbers...)
-
-	//beamgen.ParDoKV[InT any, OutK any, OutV any](scope beam.Scope, dofn DoFnInterfaceKVStruct[InT, OutK, OutV], inCol Collection[InT], opts ...beam.Option)
-	pre := beamgen.ParDoKV[T, int, T](s.Scope("AssignShardNumber"), &assignShardNumberFn[T]{shardCount}, col)
+	pre := beamgen.ParDoKV[T, int, T](s.Scope("AssignShardNumber"), &assignShardNumberFn{shardCount}, col)
 
 	//pre := beamgen.AddFixedKey(s, col)
 	post := beamgen.GroupByKey(s, pre)
-	beamgen.ParDoGBK0[int, T](s, &writeFileFn[T]{Filename: filenamePrefix, ShardCount: shardCount}, post)
+	beamgen.ParDoGBK0[int, T](s, &writeFileFn{Filename: filenamePrefix, ShardCount: shardCount}, post)
 }
 
 type assignShardNumberFn struct {
@@ -76,7 +66,7 @@ type writeFileFn struct {
 	ShardCount int    `json:"shardCount"`
 }
 
-func (w *writeFileFn) ProcessElement(ctx context.Context, shard int, protos func(*T) bool) error {
+func (w *writeFileFn) ProcessElement(ctx context.Context, shard int, protos func(*[]byte) bool) error {
 	fs, err := filesystem.New(ctx, w.Filename)
 	if err != nil {
 		return err
@@ -85,33 +75,27 @@ func (w *writeFileFn) ProcessElement(ctx context.Context, shard int, protos func
 
 	shardName := fmt.Sprintf("%05d-of-%05d", shard+1, w.ShardCount)
 
-	fd, err := fs.OpenWrite(ctx, w.Filename+"-"+shardName)
+	filename := w.Filename + "-" + shardName
+	recordWriter, err := tfrecord.NewWriter(filename, &tfrecord.RecordWriterOptions{
+		CompressionType: tfrecord.CompressionTypeNone,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating record writer: %w", err)
 	}
-	buf := bufio.NewWriterSize(fd, 1000*1000*5) // use 5MB buffer
-	recordWriter := tfrecord.NewWriter(buf, nil)
 
-	messageName := zeroT.ProtoReflect().Descriptor().FullName()
-
-	log.Infof(ctx, "Writing riegeli record of %s protos to %v", messageName, w.Filename)
-
-	var elem T
+	var elem []byte
 	for protos(&elem) {
-		if err := recordWriter.PutProto(elem); err != nil {
-			return fmt.Errorf("error writing proto to riegeli file: %w", err)
+		if err := recordWriter.WriteRecord(elem); err != nil {
+			return fmt.Errorf("error writing proto to TFRecord file: %w", err)
 		}
 	}
 
 	if err := recordWriter.Flush(); err != nil {
-		return fmt.Errorf("error flushing bytes to riegeli file: %w", err)
+		return fmt.Errorf("error flushing bytes to TFRecord file: %w", err)
 	}
 
-	if err := buf.Flush(); err != nil {
-		return fmt.Errorf("error flushing bytes to riegeli file: %w", err)
-	}
-	if err := fd.Close(); err != nil {
-		return fmt.Errorf("error closing riegeli file: %w", err)
+	if err := recordWriter.Close(); err != nil {
+		return fmt.Errorf("error closing TFRecord file: %w", err)
 	}
 	return nil
 }

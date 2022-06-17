@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"reflect"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/x/beamx"
@@ -19,6 +20,10 @@ var (
 	recordSize    = flag.Int("record_bytes", 1024*1024*3, "output tfrecords prefix")
 	recordCount   = flag.Int("record_count", 1000, "output tfrecords prefix")
 )
+
+func init() {
+	beam.RegisterDoFn(reflect.TypeOf(randomBytesGeneratorFn{}))
+}
 
 func main() {
 	flag.Parse()

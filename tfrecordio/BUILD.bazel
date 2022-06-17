@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "tfrecordio",
+    srcs = ["tfrecordio.go"],
+    importpath = "github.com/gonzojive/beam-go-bazel-example/tfrecordio",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beamgen",
+        "//tfrecordio/tfrecord",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/core/runtime/graphx/schema",
+        "@com_github_apache_beam_sdks_v2//go/pkg/beam/io/filesystem",
+    ],
+)
